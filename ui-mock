@@ -1,0 +1,1494 @@
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, ChevronLeft, AlertTriangle, CheckCircle, Clock, FileText, Calculator, Scale, Phone, Mail, DollarSign, Calendar, User, AlertCircle, Download } from 'lucide-react';
+
+const FloridaChildSupportIntake = () => {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState({
+    // Phase 1: Initial Triage
+    caseTypes: [],
+    urgentConsequences: [],
+    noticeDate: '',
+    daysToRespond: '',
+    hasExistingOrder: '',
+    orderAmount: '',
+    orderDate: '',
+    
+    // Phase 2: Detailed Analysis - Modification
+    incomeChanges: [],
+    wasVoluntary: '',
+    previousIncome: '',
+    currentIncome: '',
+    parentingTimeChanges: [],
+    actualOvernights: { you: '', otherParent: '' },
+    orderedOvernights: { you: '', otherParent: '' },
+    expenseChanges: [],
+    otherCircumstances: [],
+    
+    // Phase 2: Enforcement specific
+    totalOwed: '',
+    behindDuration: '',
+    monthlyAmount: '',
+    lastPaymentDate: '',
+    lastPaymentAmount: '',
+    enforcementActions: [],
+    nonPaymentReason: [],
+    currentMonthlyIncome: '',
+    currentMonthlyExpenses: '',
+    
+    // Phase 3: Personal Information
+    personalInfo: {
+      fullName: '', dob: '', ssn: '', address: '', phone: '', email: '',
+      employer: '', position: '', grossIncome: '', netIncome: ''
+    },
+    otherParentInfo: {
+      fullName: '', dob: '', address: '', phone: '', employer: '', estimatedIncome: ''
+    },
+    children: [{ name: '', dob: '', residence: '', specialNeeds: '', overnightSchedule: '' }],
+    
+    // Phase 4: Case History
+    caseInfo: {
+      county: '', caseNumber: '', judge: '', originalDate: '', lastModDate: ''
+    },
+    dorInvolved: '',
+    previousModifications: '',
+    documentsHave: [],
+    missingDocs: ''
+  });
+
+  const [errors, setErrors] = useState({});
+  const [urgencyLevel, setUrgencyLevel] = useState('normal');
+  const [calculatedChange, setCalculatedChange] = useState(null);
+  const [legalAssessment, setLegalAssessment] = useState(null);
+
+  // Calculate urgency based on consequences
+  useEffect(() => {
+    if (formData.urgentConsequences.length > 0) {
+      setUrgencyLevel('critical');
+    } else if (formData.caseTypes.includes('behind-payments') || formData.caseTypes.includes('not-receiving')) {
+      setUrgencyLevel('high');
+    } else {
+      setUrgencyLevel('normal');
+    }
+  }, [formData.urgentConsequences, formData.caseTypes]);
+
+  // Calculate modification likelihood
+  useEffect(() => {
+    if (formData.orderAmount && formData.currentIncome && formData.previousIncome && formData.orderDate) {
+      const oldAmount = parseFloat(formData.orderAmount);
+      const newIncome = parseFloat(formData.currentIncome);
+      const oldIncome = parseFloat(formData.previousIncome);
+      const orderDate = new Date(formData.orderDate);
+      const now = new Date();
+      const yearsSince = (now - orderDate) / (1000 * 60 * 60 * 24 * 365);
+      
+      if (oldAmount && newIncome && oldIncome) {
+        const incomeRatio = newIncome / oldIncome;
+        const estimatedNewAmount = oldAmount * incomeRatio;
+        const change = Math.abs(estimatedNewAmount - oldAmount);
+        const percentChange = (change / oldAmount) * 100;
+        
+        // Determine threshold based on years since order
+        const threshold = yearsSince >= 3 ? { percent: 10, dollar: 25 } : { percent: 15, dollar: 50 };
+        const meetsThreshold = percentChange >= threshold.percent || change >= threshold.dollar;
+        
+        setCalculatedChange({
+          oldAmount,
+          estimatedNewAmount: estimatedNewAmount.toFixed(2),
+          dollarChange: change.toFixed(2),
+          percentChange: percentChange.toFixed(1),
+          meetsThreshold,
+          threshold,
+          yearsSince: yearsSince.toFixed(1)
+        });
+      }
+    }
+  }, [formData.orderAmount, formData.currentIncome, formData.previousIncome, formData.orderDate]);
+
+  // Generate legal assessment
+  useEffect(() => {
+    if (currentStep === 5) {
+      generateLegalAssessment();
+    }
+  }, [currentStep, formData, calculatedChange]);
+
+  const generateLegalAssessment = () => {
+    const isModification = formData.caseTypes.includes('modify-support');
+    const isEnforcement = formData.caseTypes.includes('not-receiving') || formData.caseTypes.includes('behind-payments');
+    
+    let assessment = {
+      urgency: urgencyLevel,
+      modificationLikelihood: 'unknown',
+      enforcementOptions: [],
+      immediateActions: [],
+      estimatedCosts: 'unknown',
+      timeline: 'unknown'
+    };
+
+    if (isModification && calculatedChange) {
+      if (calculatedChange.meetsThreshold && formData.wasVoluntary === 'involuntary') {
+        assessment.modificationLikelihood = 'high';
+        assessment.estimatedCosts = '$2,500 - $5,000';
+        assessment.timeline = '3-6 months';
+      } else if (calculatedChange.meetsThreshold) {
+        assessment.modificationLikelihood = 'moderate';
+        assessment.estimatedCosts = '$3,000 - $6,000';
+        assessment.timeline = '4-8 months';
+      } else {
+        assessment.modificationLikelihood = 'low';
+        assessment.estimatedCosts = '$2,000 - $4,000';
+        assessment.timeline = '2-4 months';
+      }
+    }
+
+    if (isEnforcement) {
+      const owed = parseFloat(formData.totalOwed);
+      if (owed > 2500) {
+        assessment.enforcementOptions.push('Passport denial/revocation');
+      }
+      if (owed > 600) {
+        assessment.enforcementOptions.push('Bank account garnishment');
+      }
+      assessment.enforcementOptions.push('Income withholding', 'License suspension', 'Contempt proceedings');
+    }
+
+    if (urgencyLevel === 'critical') {
+      assessment.immediateActions.push('File emergency motion to contest suspension');
+      assessment.immediateActions.push('Gather documentation immediately');
+    }
+
+    setLegalAssessment(assessment);
+  };
+
+  const updateFormData = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const updateNestedFormData = (parent, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [parent]: {
+        ...prev[parent],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleArrayToggle = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: prev[field].includes(value) 
+        ? prev[field].filter(item => item !== value)
+        : [...prev[field], value]
+    }));
+  };
+
+  const addChild = () => {
+    setFormData(prev => ({
+      ...prev,
+      children: [...prev.children, { name: '', dob: '', residence: '', specialNeeds: '', overnightSchedule: '' }]
+    }));
+  };
+
+  const updateChild = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      children: prev.children.map((child, i) => 
+        i === index ? { ...child, [field]: value } : child
+      )
+    }));
+  };
+
+  const validateCurrentStep = () => {
+    const newErrors = {};
+    
+    if (currentStep === 1) {
+      if (formData.caseTypes.length === 0) {
+        newErrors.caseTypes = 'Please select at least one situation that applies to you';
+      }
+      if (formData.hasExistingOrder === '') {
+        newErrors.hasExistingOrder = 'Please indicate if you have an existing child support order';
+      }
+    } else if (currentStep === 3) {
+      if (!formData.personalInfo.fullName) {
+        newErrors.personalName = 'Full name is required';
+      }
+      if (!formData.personalInfo.phone) {
+        newErrors.personalPhone = 'Phone number is required';
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const nextStep = () => {
+    if (validateCurrentStep()) {
+      setCurrentStep(prev => Math.min(prev + 1, 5));
+    }
+  };
+
+  const prevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+  };
+
+  const UrgencyBanner = () => {
+    if (urgencyLevel === 'critical') {
+      return (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6 animate-pulse">
+          <div className="flex items-center">
+            <AlertTriangle className="h-6 w-6 text-red-400 mr-3" />
+            <div>
+              <h3 className="text-red-800 font-bold text-lg">🚨 URGENT: Immediate Action Required</h3>
+              <p className="text-red-700 text-sm mt-1">
+                You have {formData.daysToRespond || 'limited'} days to respond to avoid serious consequences including license suspension.
+              </p>
+              <div className="mt-2 flex space-x-4">
+                <Phone className="h-4 w-4 text-red-600" />
+                <span className="text-red-700 text-sm font-medium">Call now: (555) 123-4567</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    } else if (urgencyLevel === 'high') {
+      return (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+          <div className="flex items-center">
+            <Clock className="h-5 w-5 text-yellow-500 mr-3" />
+            <div>
+              <h3 className="text-yellow-800 font-medium">High Priority Case</h3>
+              <p className="text-yellow-700 text-sm mt-1">
+                Your situation requires prompt attention to prevent enforcement actions.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const StepProgress = () => {
+    const steps = [
+      { number: 1, title: 'Initial Assessment', icon: AlertTriangle },
+      { number: 2, title: 'Situation Details', icon: FileText },
+      { number: 3, title: 'Personal Information', icon: User },
+      { number: 4, title: 'Case History', icon: Clock },
+      { number: 5, title: 'Legal Assessment', icon: Scale }
+    ];
+
+    return (
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            const isCompleted = currentStep > step.number;
+            const isCurrent = currentStep === step.number;
+            
+            return (
+              <div key={step.number} className="flex items-center flex-1">
+                <div className={`flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300 ${
+                  isCompleted ? 'bg-green-500 border-green-500 text-white shadow-lg' :
+                  isCurrent ? 'bg-blue-500 border-blue-500 text-white shadow-lg scale-110' :
+                  'bg-gray-100 border-gray-300 text-gray-500'
+                }`}>
+                  {isCompleted ? <CheckCircle className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className={`text-sm font-medium ${isCurrent ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
+                    Step {step.number}
+                  </p>
+                  <p className={`text-xs ${isCurrent ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
+                    {step.title}
+                  </p>
+                </div>
+                {index < steps.length - 1 && (
+                  <div className={`w-full h-1 mx-4 rounded ${isCompleted ? 'bg-green-500' : 'bg-gray-200'} transition-all duration-300`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const CheckboxGroup = ({ title, options, selectedValues, onChange, error }) => (
+    <div className={`space-y-3 ${error ? 'border-red-300 border rounded-md p-3' : ''}`}>
+      {title && <h4 className="text-md font-medium text-gray-800 mb-3">{title}</h4>}
+      {options.map(option => (
+        <label key={option.value} className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors">
+          <input
+            type="checkbox"
+            checked={selectedValues.includes(option.value)}
+            onChange={() => onChange(option.value)}
+            className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+          />
+          <div className="flex-1">
+            <span className="text-sm text-gray-700 font-medium">{option.label}</span>
+            {option.description && <p className="text-xs text-gray-500 mt-1">{option.description}</p>}
+          </div>
+        </label>
+      ))}
+      {error && <p className="text-red-500 text-xs mt-1 font-medium">{error}</p>}
+    </div>
+  );
+
+  const Step1InitialTriage = () => (
+    <div className="space-y-8">
+      <UrgencyBanner />
+      
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+          <AlertCircle className="h-6 w-6 text-blue-500 mr-2" />
+          What best describes your current situation?
+        </h3>
+        <CheckboxGroup
+          options={[
+            { 
+              value: 'modify-support', 
+              label: 'I need to modify my child support payments (increase/decrease)',
+              description: 'Your income or circumstances have changed significantly'
+            },
+            { 
+              value: 'behind-payments', 
+              label: "I'm behind on child support payments and facing consequences",
+              description: 'You owe back support and may face license suspension or other penalties'
+            },
+            { 
+              value: 'not-receiving', 
+              label: "The other parent isn't paying court-ordered support",
+              description: 'You need help collecting unpaid child support'
+            },
+            { 
+              value: 'enforcement-notices', 
+              label: "I've received notices about license suspension or passport denial",
+              description: 'You have urgent enforcement actions pending'
+            },
+            { 
+              value: 'establish-new', 
+              label: 'I need to establish child support for the first time',
+              description: 'No current support order exists'
+            }
+          ]}
+          selectedValues={formData.caseTypes}
+          onChange={(value) => handleArrayToggle('caseTypes', value)}
+          error={errors.caseTypes}
+        />
+      </div>
+
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-red-800 mb-6 flex items-center">
+          <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
+          Are you currently facing any immediate consequences?
+        </h3>
+        <p className="text-red-700 text-sm mb-4">⚠️ These require immediate legal attention with strict deadlines:</p>
+        <CheckboxGroup
+          options={[
+            { 
+              value: 'license-suspension', 
+              label: 'Driver\'s license suspension notice received',
+              description: 'Usually have 20 days to respond or contest'
+            },
+            { 
+              value: 'professional-license', 
+              label: 'Professional/occupational license at risk',
+              description: 'Business, medical, legal, or other professional licenses'
+            },
+            { 
+              value: 'passport-denied', 
+              label: 'Passport application denied or passport revoked',
+              description: 'Triggered when you owe $2,500+ in back support'
+            },
+            { 
+              value: 'bank-frozen', 
+              label: 'Bank accounts frozen or garnished',
+              description: 'Assets seized for unpaid support'
+            },
+            { 
+              value: 'contempt-court', 
+              label: 'Contempt of court proceedings scheduled',
+              description: 'Court hearing for willful non-payment'
+            },
+            { 
+              value: 'income-withholding', 
+              label: 'Income withholding orders in effect',
+              description: 'Employer receiving garnishment orders'
+            },
+            { 
+              value: 'tax-intercept', 
+              label: 'Tax refund intercepted',
+              description: 'State or federal tax refunds seized'
+            },
+            { 
+              value: 'credit-reporting', 
+              label: 'Credit reporting issues',
+              description: 'Delinquent support reported to credit bureaus'
+            }
+          ]}
+          selectedValues={formData.urgentConsequences}
+          onChange={(value) => handleArrayToggle('urgentConsequences', value)}
+        />
+        
+        {formData.urgentConsequences.length > 0 && (
+          <div className="mt-6 p-4 bg-white rounded-md border border-red-200">
+            <h4 className="font-medium text-red-800 mb-3">⏰ Critical Deadline Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date Notice Received</label>
+                <input
+                  type="date"
+                  value={formData.noticeDate}
+                  onChange={(e) => updateFormData('noticeDate', e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Days Remaining to Respond</label>
+                <input
+                  type="number"
+                  value={formData.daysToRespond}
+                  onChange={(e) => updateFormData('daysToRespond', e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                  placeholder="e.g., 20"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-blue-800 mb-6 flex items-center">
+          <FileText className="h-6 w-6 text-blue-600 mr-2" />
+          Current Child Support Order Status
+        </h3>
+        <div className="space-y-4">
+          {[
+            { value: 'yes-amount', label: 'Yes, I have an order with a specific monthly amount' },
+            { value: 'yes-unclear', label: 'Yes, but the amount is unclear or disputed' },
+            { value: 'no-order', label: 'No current order exists' },
+            { value: 'unsure', label: 'I\'m unsure about my order status' }
+          ].map(option => (
+            <label key={option.value} className="flex items-center space-x-3 cursor-pointer hover:bg-white p-3 rounded-md transition-colors">
+              <input
+                type="radio"
+                name="hasExistingOrder"
+                value={option.value}
+                checked={formData.hasExistingOrder === option.value}
+                onChange={(e) => updateFormData('hasExistingOrder', e.target.value)}
+                className="text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <span className="text-sm text-gray-700 font-medium">{option.label}</span>
+            </label>
+          ))}
+        </div>
+        {errors.hasExistingOrder && <p className="text-red-500 text-xs mt-2 font-medium">{errors.hasExistingOrder}</p>}
+        
+        {formData.hasExistingOrder === 'yes-amount' && (
+          <div className="mt-6 p-4 bg-white rounded-md border border-blue-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Support Amount</label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <DollarSign className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="number"
+                    value={formData.orderAmount}
+                    onChange={(e) => updateFormData('orderAmount', e.target.value)}
+                    className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date Order Was Last Established/Modified</label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    value={formData.orderDate}
+                    onChange={(e) => updateFormData('orderDate', e.target.value)}
+                    className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const Step2SituationDetails = () => {
+    const isModificationCase = formData.caseTypes.includes('modify-support');
+    const isEnforcementCase = formData.caseTypes.includes('not-receiving') || formData.caseTypes.includes('behind-payments');
+
+    return (
+      <div className="space-y-8">
+        {isModificationCase && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-green-800 mb-6 flex items-center">
+              <Calculator className="h-6 w-6 text-green-600 mr-2" />
+              Income and Circumstance Changes
+            </h3>
+            
+            <div className="space-y-6">
+              <CheckboxGroup
+                title="What income changes have occurred since your last order?"
+                options={[
+                  { value: 'job-loss', label: 'Job loss', description: 'Complete loss of employment' },
+                  { value: 'pay-reduction', label: 'Significant pay reduction', description: 'Salary or wage decrease' },
+                  { value: 'new-job', label: 'New higher-paying job', description: 'Increased income from new position' },
+                  { value: 'disability', label: 'Disability/inability to work', description: 'Medical condition affecting work capacity' },
+                  { value: 'retirement', label: 'Retirement', description: 'Transition from work to retirement income' },
+                  { value: 'business-change', label: 'Business income change', description: 'Self-employment income variation' },
+                  { value: 'overtime-loss', label: 'Loss of overtime/bonuses', description: 'Reduction in additional compensation' },
+                  { value: 'new-employment', label: 'New employment after unemployment', description: 'Found job after period of unemployment' }
+                ]}
+                selectedValues={formData.incomeChanges}
+                onChange={(value) => handleArrayToggle('incomeChanges', value)}
+              />
+              
+              {formData.incomeChanges.length > 0 && (
+                <div className="bg-white p-4 rounded-md border border-green-200 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Was this income change voluntary or involuntary?
+                    </label>
+                    <p className="text-xs text-gray-600 mb-3">
+                      ⚖️ Florida law requires changes to be involuntary for modification eligibility
+                    </p>
+                    <div className="space-y-2">
+                      <label className="flex items-center space-x-3">
+                        <input
+                          type="radio"
+                          name="wasVoluntary"
+                          value="involuntary"
+                          checked={formData.wasVoluntary === 'involuntary'}
+                          onChange={(e) => updateFormData('wasVoluntary', e.target.value)}
+                          className="text-green-600 focus:ring-green-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          <span className="font-medium">Involuntary</span> - layoff, company closure, medical condition, etc.
+                        </span>
+                      </label>
+                      <label className="flex items-center space-x-3">
+                        <input
+                          type="radio"
+                          name="wasVoluntary"
+                          value="voluntary"
+                          checked={formData.wasVoluntary === 'voluntary'}
+                          onChange={(e) => updateFormData('wasVoluntary', e.target.value)}
+                          className="text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          <span className="font-medium">Voluntary</span> - quit job, chose to reduce hours, etc.
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Previous Monthly Income</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <DollarSign className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <input
+                          type="number"
+                          value={formData.previousIncome}
+                          onChange={(e) => updateFormData('previousIncome', e.target.value)}
+                          className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Current Monthly Income</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <DollarSign className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <input
+                          type="number"
+                          value={formData.currentIncome}
+                          onChange={(e) => updateFormData('currentIncome', e.target.value)}
+                          className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {calculatedChange && (
+                    <div className={`p-4 rounded-md border ${calculatedChange.meetsThreshold ? 'bg-green-100 border-green-300' : 'bg-yellow-100 border-yellow-300'}`}>
+                      <h4 className="font-medium text-gray-800 mb-2">
+                        📊 Modification Threshold Analysis
+                      </h4>
+                      <div className="text-sm space-y-1">
+                        <p>Current support: <span className="font-medium">${calculatedChange.oldAmount}</span></p>
+                        <p>Estimated new support: <span className="font-medium">${calculatedChange.estimatedNewAmount}</span></p>
+                        <p>Dollar change: <span className="font-medium">${calculatedChange.dollarChange}</span></p>
+                        <p>Percentage change: <span className="font-medium">{calculatedChange.percentChange}%</span></p>
+                        <p>Required threshold: <span className="font-medium">{calculatedChange.threshold.percent}% or ${calculatedChange.threshold.dollar}</span></p>
+                        <p className={`font-bold ${calculatedChange.meetsThreshold ? 'text-green-700' : 'text-yellow-700'}`}>
+                          {calculatedChange.meetsThreshold ? '✅ Meets threshold for modification' : '⚠️ May not meet statutory threshold'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <CheckboxGroup
+                title="Changes in parenting time/overnight schedule?"
+                options={[
+                  { value: 'more-overnights', label: 'Child spends more overnights with me than court order specifies' },
+                  { value: 'fewer-overnights', label: 'Child spends fewer overnights with me than specified' },
+                  { value: 'schedule-change', label: 'Significant change in actual vs. ordered parenting schedule' }
+                ]}
+                selectedValues={formData.parentingTimeChanges}
+                onChange={(value) => handleArrayToggle('parentingTimeChanges', value)}
+              />
+
+              {formData.parentingTimeChanges.length > 0 && (
+                <div className="bg-white p-4 rounded-md border border-green-200">
+                  <h4 className="font-medium text-gray-800 mb-3">Overnight Schedule Details</h4>
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Your actual overnights/year</label>
+                      <input
+                        type="number"
+                        value={formData.actualOvernights.you}
+                        onChange={(e) => updateFormData('actualOvernights', {...formData.actualOvernights, you: e.target.value})}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                        placeholder="e.g., 180"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Other parent actual overnights/year</label>
+                      <input
+                        type="number"
+                        value={formData.actualOvernights.otherParent}
+                        onChange={(e) => updateFormData('actualOvernights', {...formData.actualOvernights, otherParent: e.target.value})}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                        placeholder="e.g., 185"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Court-ordered overnights for you</label>
+                      <input
+                        type="number"
+                        value={formData.orderedOvernights.you}
+                        onChange={(e) => updateFormData('orderedOvernights', {...formData.orderedOvernights, you: e.target.value})}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                        placeholder="e.g., 150"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Court-ordered overnights for other parent</label>
+                      <input
+                        type="number"
+                        value={formData.orderedOvernights.otherParent}
+                        onChange={(e) => updateFormData('orderedOvernights', {...formData.orderedOvernights, otherParent: e.target.value})}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                        placeholder="e.g., 215"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <CheckboxGroup
+                title="Changes in child-related expenses?"
+                options={[
+                  { value: 'daycare-increase', label: 'Daycare costs increased' },
+                  { value: 'daycare-decrease', label: 'Daycare costs decreased or no longer needed' },
+                  { value: 'health-insurance', label: 'Health insurance costs changed significantly' },
+                  { value: 'medical-needs', label: 'Child developed special medical needs' },
+                  { value: 'education-costs', label: 'Educational expenses changed' },
+                  { value: 'other-expenses', label: 'Other significant expense changes' }
+                ]}
+                selectedValues={formData.expenseChanges}
+                onChange={(value) => handleArrayToggle('expenseChanges', value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {isEnforcementCase && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-red-800 mb-6 flex items-center">
+              <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
+              Child Support Payment Analysis
+            </h3>
+            
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount Currently Owed</label>
+                  <div className="relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <DollarSign className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="number"
+                      value={formData.totalOwed}
+                      onChange={(e) => updateFormData('totalOwed', e.target.value)}
+                      className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Support Amount</label>
+                  <div className="relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <DollarSign className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="number"
+                      value={formData.monthlyAmount}
+                      onChange={(e) => updateFormData('monthlyAmount', e.target.value)}
+                      className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">How far behind are payments?</label>
+                <div className="space-y-2">
+                  {[
+                    { value: '1-30', label: '1-30 days behind' },
+                    { value: '31-90', label: '31-90 days behind' },
+                    { value: '91-180', label: '91-180 days behind (3-6 months)' },
+                    { value: '181-365', label: '181-365 days behind (6-12 months)' },
+                    { value: '1-2-years', label: '1-2 years behind' },
+                    { value: '2-plus-years', label: 'More than 2 years behind' }
+                  ].map(option => (
+                    <label key={option.value} className="flex items-center space-x-3">
+                      <input
+                        type="radio"
+                        name="behindDuration"
+                        value={option.value}
+                        checked={formData.behindDuration === option.value}
+                        onChange={(e) => updateFormData('behindDuration', e.target.value)}
+                        className="text-red-600 focus:ring-red-500"
+                      />
+                      <span className="text-sm text-gray-700">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Payment Date</label>
+                  <input
+                    type="date"
+                    value={formData.lastPaymentDate}
+                    onChange={(e) => updateFormData('lastPaymentDate', e.target.value)}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Payment Amount</label>
+                  <div className="relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <DollarSign className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="number"
+                      value={formData.lastPaymentAmount}
+                      onChange={(e) => updateFormData('lastPaymentAmount', e.target.value)}
+                      className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <CheckboxGroup
+                title="What enforcement actions have already occurred?"
+                options={[
+                  { value: 'income-withholding', label: 'Income withholding order issued' },
+                  { value: 'tax-intercept', label: 'Tax refund intercepted' },
+                  { value: 'bank-garnish', label: 'Bank account garnished' },
+                  { value: 'license-notice', label: 'License suspension notice sent' },
+                  { value: 'passport-denial', label: 'Passport denial notice received' },
+                  { value: 'contempt-filed', label: 'Contempt proceedings filed' },
+                  { value: 'credit-reported', label: 'Delinquency reported to credit bureaus' },
+                  { value: 'property-lien', label: 'Property liens filed' },
+                  { value: 'none-yet', label: 'No enforcement actions yet' }
+                ]}
+                selectedValues={formData.enforcementActions}
+                onChange={(value) => handleArrayToggle('enforcementActions', value)}
+              />
+
+              {formData.totalOwed && parseFloat(formData.totalOwed) > 0 && (
+                <div className={`p-4 rounded-md border ${
+                  parseFloat(formData.totalOwed) >= 2500 ? 'bg-red-100 border-red-300' : 'bg-yellow-100 border-yellow-300'
+                }`}>
+                  <h4 className="font-medium text-gray-800 mb-2">🚨 Enforcement Risk Assessment</h4>
+                  <div className="text-sm space-y-1">
+                    {parseFloat(formData.totalOwed) >= 2500 && (
+                      <p className="text-red-700 font-medium">⚠️ At risk for passport denial/revocation ($2,500+ threshold)</p>
+                    )}
+                    {parseFloat(formData.totalOwed) >= 600 && (
+                      <p className="text-red-700 font-medium">⚠️ At risk for bank account garnishment ($600+ threshold)</p>
+                    )}
+                    <p className="text-red-700">⚠️ At risk for driver's license suspension</p>
+                    <p className="text-red-700">⚠️ At risk for professional license suspension</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const Step3PersonalInformation = () => (
+    <div className="space-y-8">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-blue-800 mb-6 flex items-center">
+          <User className="h-6 w-6 text-blue-600 mr-2" />
+          Your Personal Information
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4 md:space-y-0">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Legal Name *</label>
+            <input
+              type="text"
+              value={formData.personalInfo.fullName}
+              onChange={(e) => updateNestedFormData('personalInfo', 'fullName', e.target.value)}
+              className={`w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${errors.personalName ? 'border-red-300' : ''}`}
+              placeholder="First Last"
+            />
+            {errors.personalName && <p className="text-red-500 text-xs mt-1">{errors.personalName}</p>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+            <input
+              type="date"
+              value={formData.personalInfo.dob}
+              onChange={(e) => updateNestedFormData('personalInfo', 'dob', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+            <input
+              type="tel"
+              value={formData.personalInfo.phone}
+              onChange={(e) => updateNestedFormData('personalInfo', 'phone', e.target.value)}
+              className={`w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${errors.personalPhone ? 'border-red-300' : ''}`}
+              placeholder="(555) 123-4567"
+            />
+            {errors.personalPhone && <p className="text-red-500 text-xs mt-1">{errors.personalPhone}</p>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input
+              type="email"
+              value={formData.personalInfo.email}
+              onChange={(e) => updateNestedFormData('personalInfo', 'email', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="email@example.com"
+            />
+          </div>
+        </div>
+        
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Current Address</label>
+          <textarea
+            value={formData.personalInfo.address}
+            onChange={(e) => updateNestedFormData('personalInfo', 'address', e.target.value)}
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            rows="2"
+            placeholder="Street Address, City, State, ZIP"
+          />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Employer</label>
+            <input
+              type="text"
+              value={formData.personalInfo.employer}
+              onChange={(e) => updateNestedFormData('personalInfo', 'employer', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Company Name"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Job Title/Position</label>
+            <input
+              type="text"
+              value={formData.personalInfo.position}
+              onChange={(e) => updateNestedFormData('personalInfo', 'position', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Your Position"
+            />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Gross Monthly Income</label>
+            <div className="relative rounded-md shadow-sm">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <DollarSign className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="number"
+                value={formData.personalInfo.grossIncome}
+                onChange={(e) => updateNestedFormData('personalInfo', 'grossIncome', e.target.value)}
+                className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Net Monthly Income</label>
+            <div className="relative rounded-md shadow-sm">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <DollarSign className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="number"
+                value={formData.personalInfo.netIncome}
+                onChange={(e) => updateNestedFormData('personalInfo', 'netIncome', e.target.value)}
+                className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-gray-800 mb-6">Other Parent Information</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4 md:space-y-0">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Legal Name</label>
+            <input
+              type="text"
+              value={formData.otherParentInfo.fullName}
+              onChange={(e) => updateNestedFormData('otherParentInfo', 'fullName', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+              placeholder="First Last"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+            <input
+              type="date"
+              value={formData.otherParentInfo.dob}
+              onChange={(e) => updateNestedFormData('otherParentInfo', 'dob', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+            />
+          </div>
+        </div>
+        
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Last Known Address</label>
+          <textarea
+            value={formData.otherParentInfo.address}
+            onChange={(e) => updateNestedFormData('otherParentInfo', 'address', e.target.value)}
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+            rows="2"
+            placeholder="Street Address, City, State, ZIP"
+          />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Known Phone</label>
+            <input
+              type="tel"
+              value={formData.otherParentInfo.phone}
+              onChange={(e) => updateNestedFormData('otherParentInfo', 'phone', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+              placeholder="(555) 123-4567"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Known Employer</label>
+            <input
+              type="text"
+              value={formData.otherParentInfo.employer}
+              onChange={(e) => updateNestedFormData('otherParentInfo', 'employer', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+              placeholder="Company Name"
+            />
+          </div>
+        </div>
+        
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Monthly Income</label>
+          <div className="relative rounded-md shadow-sm">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <DollarSign className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="number"
+              value={formData.otherParentInfo.estimatedIncome}
+              onChange={(e) => updateNestedFormData('otherParentInfo', 'estimatedIncome', e.target.value)}
+              className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-purple-800 mb-6">Children Information</h3>
+        
+        {formData.children.map((child, index) => (
+          <div key={index} className="bg-white p-4 rounded-md border border-purple-200 mb-4">
+            <h4 className="font-medium text-gray-800 mb-3">Child {index + 1}</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={child.name}
+                  onChange={(e) => updateChild(index, 'name', e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                  placeholder="Child's Full Name"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                <input
+                  type="date"
+                  value={child.dob}
+                  onChange={(e) => updateChild(index, 'dob', e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+            
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Primary Residence</label>
+              <input
+                type="text"
+                value={child.residence}
+                onChange={(e) => updateChild(index, 'residence', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                placeholder="With whom does child primarily live?"
+              />
+            </div>
+            
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Special Needs/Medical Conditions</label>
+              <textarea
+                value={child.specialNeeds}
+                onChange={(e) => updateChild(index, 'specialNeeds', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                rows="2"
+                placeholder="Any special medical, educational, or other needs"
+              />
+            </div>
+            
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Current Overnight Schedule</label>
+              <textarea
+                value={child.overnightSchedule}
+                onChange={(e) => updateChild(index, 'overnightSchedule', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                rows="2"
+                placeholder="Describe current overnight schedule with each parent"
+              />
+            </div>
+          </div>
+        ))}
+        
+        <button
+          type="button"
+          onClick={addChild}
+          className="mt-3 px-4 py-2 border border-purple-300 rounded-md text-sm font-medium text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        >
+          + Add Another Child
+        </button>
+      </div>
+    </div>
+  );
+
+  const Step4CaseHistory = () => (
+    <div className="space-y-8">
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-yellow-800 mb-6 flex items-center">
+          <Clock className="h-6 w-6 text-yellow-600 mr-2" />
+          Case History and Documentation
+        </h3>
+        
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">County Where Order Was Entered</label>
+              <input
+                type="text"
+                value={formData.caseInfo.county}
+                onChange={(e) => updateNestedFormData('caseInfo', 'county', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+                placeholder="e.g., Miami-Dade, Orange, etc."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Case Number</label>
+              <input
+                type="text"
+                value={formData.caseInfo.caseNumber}
+                onChange={(e) => updateNestedFormData('caseInfo', 'caseNumber', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+                placeholder="e.g., 2020-DR-012345"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Judge Name (if known)</label>
+              <input
+                type="text"
+                value={formData.caseInfo.judge}
+                onChange={(e) => updateNestedFormData('caseInfo', 'judge', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+                placeholder="Judge Last Name"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date of Original Order</label>
+              <input
+                type="date"
+                value={formData.caseInfo.originalDate}
+                onChange={(e) => updateNestedFormData('caseInfo', 'originalDate', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date of Last Modification</label>
+              <input
+                type="date"
+                value={formData.caseInfo.lastModDate}
+                onChange={(e) => updateNestedFormData('caseInfo', 'lastModDate', e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">Is the Florida Department of Revenue involved in your case?</label>
+            <div className="space-y-2">
+              {[
+                { value: 'yes', label: 'Yes - they handle collection/enforcement' },
+                { value: 'no', label: 'No - private case' },
+                { value: 'unsure', label: 'Unsure' }
+              ].map(option => (
+                <label key={option.value} className="flex items-center space-x-3">
+                  <input
+                    type="radio"
+                    name="dorInvolved"
+                    value={option.value}
+                    checked={formData.dorInvolved === option.value}
+                    onChange={(e) => updateFormData('dorInvolved', e.target.value)}
+                    className="text-yellow-600 focus:ring-yellow-500"
+                  />
+                  <span className="text-sm text-gray-700">{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Previous Modification Attempts</label>
+            <textarea
+              value={formData.previousModifications}
+              onChange={(e) => updateFormData('previousModifications', e.target.value)}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+              rows="3"
+              placeholder="Describe any previous attempts to modify support, including dates and outcomes"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-xl font-semibold text-green-800 mb-6">Documentation Checklist</h3>
+        
+        <CheckboxGroup
+          title="What documents do you currently have available?"
+          options={[
+            { value: 'current-order', label: 'Current child support order' },
+            { value: 'pay-stubs', label: 'Most recent pay stubs (last 3 months)' },
+            { value: 'tax-returns', label: 'Tax returns (last 2 years)' },
+            { value: 'unemployment-docs', label: 'Unemployment documentation' },
+            { value: 'medical-records', label: 'Medical records (if disability/medical issue)' },
+            { value: 'bank-statements', label: 'Bank statements' },
+            { value: 'expense-docs', label: 'Expense documentation (daycare, medical, etc.)' },
+            { value: 'correspondence', label: 'Correspondence with other parent' },
+            { value: 'enforcement-notices', label: 'Enforcement notices received' },
+            { value: 'payment-history', label: 'Payment history records' },
+            { value: 'timesharing-calendar', label: 'Time-sharing calendar/documentation' }
+          ]}
+          selectedValues={formData.documentsHave}
+          onChange={(value) => handleArrayToggle('documentsHave', value)}
+        />
+        
+        <div className="mt-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Missing Critical Documents</label>
+          <textarea
+            value={formData.missingDocs}
+            onChange={(e) => updateFormData('missingDocs', e.target.value)}
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+            rows="3"
+            placeholder="List any important documents you don't have but need to obtain"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const Step5LegalAssessment = () => {
+    if (!legalAssessment) return <div>Loading assessment...</div>;
+
+    return (
+      <div className="space-y-8">
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6 shadow-lg">
+          <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+            <Scale className="h-8 w-8 text-blue-600 mr-3" />
+            Legal Case Assessment & Strategy
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className={`p-4 rounded-lg border-2 ${
+              legalAssessment.urgency === 'critical' ? 'bg-red-100 border-red-300' :
+              legalAssessment.urgency === 'high' ? 'bg-yellow-100 border-yellow-300' :
+              'bg-green-100 border-green-300'
+            }`}>
+              <h4 className="font-bold text-lg mb-2">Urgency Level</h4>
+              <p className={`text-lg font-medium ${
+                legalAssessment.urgency === 'critical' ? 'text-red-800' :
+                legalAssessment.urgency === 'high' ? 'text-yellow-800' :
+                'text-green-800'
+              }`}>
+                {legalAssessment.urgency.toUpperCase()}
+              </p>
+              {legalAssessment.urgency === 'critical' && (
+                <p className="text-red-700 text-sm mt-1">Immediate legal action required</p>
+              )}
+            </div>
+
+            {calculatedChange && (
+              <div className={`p-4 rounded-lg border-2 ${
+                calculatedChange.meetsThreshold ? 'bg-green-100 border-green-300' : 'bg-yellow-100 border-yellow-300'
+              }`}>
+                <h4 className="font-bold text-lg mb-2">Modification Likelihood</h4>
+                <p className={`text-lg font-medium ${
+                  calculatedChange.meetsThreshold ? 'text-green-800' : 'text-yellow-800'
+                }`}>
+                  {legalAssessment.modificationLikelihood.toUpperCase()}
+                </p>
+                <p className="text-sm mt-1">
+                  {calculatedChange.percentChange}% change (${calculatedChange.dollarChange})
+                </p>
+              </div>
+            )}
+          </div>
+
+          {legalAssessment.enforcementOptions.length > 0 && (
+            <div className="mt-6 p-4 bg-red-100 border border-red-300 rounded-lg">
+              <h4 className="font-bold text-lg text-red-800 mb-3">Available Enforcement Options</h4>
+              <ul className="list-disc list-inside space-y-1">
+                {legalAssessment.enforcementOptions.map((option, index) => (
+                  <li key={index} className="text-red-700">{option}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {legalAssessment.immediateActions.length > 0 && (
+            <div className="mt-6 p-4 bg-orange-100 border border-orange-300 rounded-lg">
+              <h4 className="font-bold text-lg text-orange-800 mb-3">🚨 Immediate Actions Required</h4>
+              <ul className="list-disc list-inside space-y-1">
+                {legalAssessment.immediateActions.map((action, index) => (
+                  <li key={index} className="text-orange-700 font-medium">{action}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-blue-100 border border-blue-300 rounded-lg">
+              <h4 className="font-bold text-lg text-blue-800 mb-2">Estimated Legal Costs</h4>
+              <p className="text-blue-700 font-medium">{legalAssessment.estimatedCosts}</p>
+            </div>
+            
+            <div className="p-4 bg-purple-100 border border-purple-300 rounded-lg">
+              <h4 className="font-bold text-lg text-purple-800 mb-2">Estimated Timeline</h4>
+              <p className="text-purple-700 font-medium">{legalAssessment.timeline}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+          <h4 className="text-xl font-semibold text-gray-900 mb-4">Next Steps</h4>
+          
+          <div className="space-y-4">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+              <div>
+                <h5 className="font-medium text-gray-900">Schedule Legal Consultation</h5>
+                <p className="text-gray-600 text-sm">Contact our office immediately to discuss your case details and develop a legal strategy.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+              <div>
+                <h5 className="font-medium text-gray-900">Gather Required Documentation</h5>
+                <p className="text-gray-600 text-sm">Collect all necessary financial and legal documents to support your case.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+              <div>
+                <h5 className="font-medium text-gray-900">File Appropriate Legal Motions</h5>
+                <p className="text-gray-600 text-sm">Submit required court filings within applicable deadlines.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
+          <h4 className="text-xl font-semibold text-gray-900 mb-4">Contact Information</h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex items-center space-x-3">
+              <Phone className="h-6 w-6 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">Phone</p>
+                <p className="text-blue-600 font-medium">(555) 123-4567</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <Mail className="h-6 w-6 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">Email</p>
+                <p className="text-blue-600">intake@floridasupport.com</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-6 flex space-x-4">
+            <button className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2">
+              <Download className="h-5 w-5" />
+              <span>Download Assessment Report</span>
+            </button>
+            
+            <button className="px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+              Schedule Consultation
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStep = () => {
+    switch(currentStep) {
+      case 1: return <Step1InitialTriage />;
+      case 2: return <Step2SituationDetails />;
+      case 3: return <Step3PersonalInformation />;
+      case 4: return <Step4CaseHistory />;
+      case 5: return <Step5LegalAssessment />;
+      default: return <Step1InitialTriage />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Florida Child Support Legal Intake</h1>
+            <p className="text-gray-600 mt-2">Comprehensive case assessment for modification and enforcement</p>
+          </div>
+          
+          <StepProgress />
+          
+          <div className="mt-8">
+            {renderStep()}
+          </div>
+          
+          <div className="mt-8 flex justify-between">
+            <button
+              onClick={prevStep}
+              disabled={currentStep === 1}
+              className={`px-6 py-3 rounded-lg font-medium flex items-center space-x-2 ${
+                currentStep === 1 
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  : 'bg-gray-600 text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500'
+              }`}
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span>Previous</span>
+            </button>
+            
+            {currentStep < 5 ? (
+              <button
+                onClick={nextStep}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2"
+              >
+                <span>Next</span>
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => alert('Assessment completed! Contact information provided above.')}
+                className="px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                Complete Assessment
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FloridaChildSupportIntake;
